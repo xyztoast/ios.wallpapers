@@ -15,7 +15,7 @@ function hsv2rgb(H,S,V){const f=n=>{const k=(n+H/60)%6;return(V-V*S*Math.max(0,M
 const ST=$('#stage');let LGi=null,LGsig='',LGv=0,gEls={};
 const isG=o=>o.glass&&(o.type=='rect'||o.type=='circle')&&o.vis;
 const gcfg=(o,z)=>({cornerRadius:(o.type=='circle'?Math.min(o.w,o.h)/2:Math.min(o.rad,o.w/2,o.h/2))*z,zRadius:Math.max(1,Math.min(o.bev,Math.min(o.w,o.h)/2)*z),refraction:o.refr,chromAberration:o.ca,edgeHighlight:o.edge,specular:o.spec,fresnel:o.fres,blurAmount:o.gb,tintStrength:o.ta,saturation:o.sat,opacity:o.op,shadowOpacity:.3});
-function gStyle(e,o,z){const s=e.style;s.position='absolute';s.left=(o.x-o.w/2)*z+'px';s.top=(o.y-o.h/2)*z+'px';s.width=o.w*z+'px';s.height=o.h*z+'px';s.pointerEvents='none';e.dataset.config=JSON.stringify(gcfg(o,z))}
+function gStyle(e,o,z){const s=e.style;s.position='absolute';s.left=(o.x-o.w/2)*z+'px';s.top=(o.y-o.h/2)*z+'px';s.width=o.w*z+'px';s.height=o.h*z+'px';s.pointerEvents='none';s.isolation='isolate';e.dataset.config=JSON.stringify(gcfg(o,z))}
 async function glassSync(){const gs=doc.objs.filter(isG),sig=gs.map(o=>o.id).join();
  if(!window.LiquidGlass){if(gs.length)toast('Glass library failed to load, showing a plain fallback');return}
  if(sig!==LGsig){LGsig=sig;const my=++LGv;if(LGi){LGi.destroy();LGi=null}Object.values(gEls).forEach(e=>e.remove());gEls={};const root=$('#root');
