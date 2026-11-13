@@ -1,7 +1,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wallpaper Studio</title><link rel="stylesheet" href="src/style.css"></head><body>
-<header><input id="name" value="Untitled"><button id="undo">Undo</button><button id="redo">Redo</button><input id="zoom" type="range" min="5" max="150" value="30"><select id="size"></select><span class="sp"></span><button id="imp">Open</button><button id="exp">Save</button><select id="fmt"><option>png</option><option>jpeg</option><option>webp</option></select><button id="dl" class="pri">Export</button></header>
-<aside id="L"><h3>Add</h3><div class="g"><button data-a="circle">Circle</button><button data-a="rect">Rounded</button><button data-a="blob">Blob</button><button data-a="text">Text</button><button data-a="img">Image</button></div><h3>Templates</h3><div class="g" id="tp"></div><h3>Layers</h3><div id="ly"></div></aside>
+<header class="gl"><input id="name" class="in nm" value="Untitled"><button class="btn" id="undo">Undo</button><button class="btn" id="redo">Redo</button><input id="zoom" class="rng zm" type="range" min="5" max="150" value="30"><span id="szw"></span><span class="sp"></span><button class="btn" id="imp">Open</button><button class="btn" id="exp">Save</button><span id="fmw"></span><button class="btn pri" id="dl">Export</button></header>
+<aside id="L" class="gl"><div class="seg" id="tabs"></div><div id="lp"></div></aside>
 <main id="M"><canvas id="cv"></canvas></main>
-<aside id="R"><h3>Background</h3><div id="bg"></div><h3>Selected</h3><div id="in"></div></aside>
+<aside id="R" class="gl"><div id="in"></div></aside>
+<div id="pop"></div><div id="toast"></div>
 <input type="file" id="f" hidden accept="image/*"><input type="file" id="j" hidden accept=".json">
 <script src="src/app.js"></script></body></html>
