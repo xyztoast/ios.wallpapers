@@ -1,8 +1,9 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wallpaper Studio</title><link rel="stylesheet" href="src/style.css"></head><body>
 <header class="gl"><input id="name" class="in nm" value="Untitled"><button class="btn" id="undo">Undo</button><button class="btn" id="redo">Redo</button><input id="zoom" class="rng zm" type="range" min="5" max="150" value="30"><span id="szw"></span><span class="sp"></span><button class="btn" id="imp">Open</button><button class="btn" id="exp">Save</button><span id="fmw"></span><button class="btn pri" id="dl">Export</button></header>
 <aside id="L" class="gl"><div class="seg" id="tabs"></div><div id="lp"></div></aside>
-<main id="M"><canvas id="cv"></canvas></main>
+<main id="M"><div id="stage"><div id="root"><canvas id="cv"></canvas></div><canvas id="ov"></canvas></div></main>
 <aside id="R" class="gl"><div id="in"></div></aside>
 <div id="pop"></div><div id="toast"></div>
 <input type="file" id="f" hidden accept="image/*"><input type="file" id="j" hidden accept=".json">
+<script src="vendor/liquidglass.js"></script>
 <script src="src/app.js"></script></body></html>

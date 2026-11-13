@@ -5,56 +5,40 @@ const BM=['source-over','multiply','screen','overlay','soft-light','hard-light',
 const uid=()=>Math.random().toString(36).slice(2,8),imgs={},clamp=v=>Math.max(0,Math.min(1,v));
 let doc,sel=null,zoom=.3,hist=[],fut=[],tab='add';
 const fresh=()=>({w:1170,h:2532,c1:'#5ee7c5',c2:'#b9f5d6',ang:160,grain:.08,objs:[]});
-const mk=(t,o={})=>({id:uid(),type:t,name:t,x:doc.w/2,y:doc.h/2,w:600,h:600,rot:0,fill:'#ffd36b',fill2:'#ff5e7e',op:1,blur:0,vis:1,text:'Hello',rad:140,bm:'source-over',glass:0,refr:1,ca:.3,gb:.1,fres:.5,spec:.7,bev:120,ior:1.5,tint:'#ffffff',ta:.06,...o});
+const mk=(t,o={})=>({id:uid(),type:t,name:t,x:doc.w/2,y:doc.h/2,w:600,h:600,rot:0,fill:'#ffd36b',fill2:'#ff5e7e',op:1,blur:0,vis:1,text:'Hello',rad:140,bm:'source-over',glass:0,refr:.7,ca:.05,gb:0,fres:1,spec:.3,edge:.3,sat:0,bev:150,ta:0,...o});
 // ---- color utils ----
 const hx=c=>{c=c.replace('#','');if(c.length==6)c+='ff';return[0,2,4,6].map(i=>parseInt(c.substr(i,2),16))};
 const toHex=(r,g,b,a)=>'#'+[r,g,b,a].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
 function rgb2hsv(r,g,b){r/=255;g/=255;b/=255;const M=Math.max(r,g,b),m=Math.min(r,g,b),d=M-m;let H=0;if(d){H=M==r?((g-b)/d)%6:M==g?(b-r)/d+2:(r-g)/d+4;H*=60;if(H<0)H+=360}return[H,M?d/M:0,M]}
 function hsv2rgb(H,S,V){const f=n=>{const k=(n+H/60)%6;return(V-V*S*Math.max(0,Math.min(k,4-k,1)))*255};return[f(5),f(3),f(1)]}
-// ---- liquid glass shader (webgl) ----
-let G,gErr=0;
-const VS='attribute vec2 P;void main(){gl_Position=vec4(P,0.,1.);}';
-const FS=`precision highp float;uniform sampler2D T;uniform vec2 R,C,H;uniform float rot,rad,refr,ca,bl,fr,sp,bev,op,ta,S,ior;uniform vec3 tint;
-float sd(vec2 p){float a=-rot,c=cos(a),s=sin(a);vec2 q=mat2(c,s,-s,c)*p;vec2 d=abs(q)-H+rad;return length(max(d,0.))+min(max(d.x,d.y),0.)-rad;}
-vec3 tx(vec2 f){return texture2D(T,clamp(f/R,0.,1.)).rgb;}
-void main(){vec2 f=vec2(gl_FragCoord.x,R.y-gl_FragCoord.y),p=f-C;float d=sd(p);
-float aa=smoothstep(.75,-.75,d);float sh=smoothstep(40.*S,-5.*S,sd(p-vec2(0.,14.*S)))*.28*(1.-aa);
-if(d>45.*S){gl_FragColor=vec4(0.);return;}
-float B=max(bev,2.),dep=max(-d,0.),t=clamp(dep/B,0.,1.),u=1.-t,u4=u*u*u*u;
-float y=pow(1.-u4,.25),yp=min(pow(max(1.-u4,1e-4),-.75)*u*u*u,6.);if(t>=1.)yp=0.;
-vec2 k=vec2(1.5,0.);vec2 n=normalize(vec2(sd(p+k.xy)-sd(p-k.xy),sd(p+k.yx)-sd(p-k.yx))+vec2(1e-5));
-vec3 N=normalize(vec3(n*refr*.9*yp,1.));float Lh=refr*B*.9*(.4+y);
-vec3 I=vec3(0.,0.,-1.),r0=refract(I,N,1./(ior-ca*.1)),r1=refract(I,N,1./ior),r2=refract(I,N,1./(ior+ca*.1));
-vec2 o0=r0.xy/-r0.z*Lh,o1=r1.xy/-r1.z*Lh,o2=r2.xy/-r2.z*Lh;float br=bl*24.*S;vec3 col=vec3(0.);
-for(int i=0;i<9;i++){vec2 o=vec2(float(i/3)-1.,float(i-(i/3)*3)-1.)*br;col+=vec3(tx(f+o+o0).r,tx(f+o+o1).g,tx(f+o+o2).b);}
-col/=9.;col=mix(col,tint,ta);
-vec3 V=vec3(0.,0.,1.),L1=normalize(vec3(-.5,-.7,.5)),L2=normalize(vec3(.5,.7,.5));
-float s1=pow(max(dot(N,normalize(L1+V)),0.),40.)+.6*pow(max(dot(N,normalize(L2+V)),0.),40.);
-col+=sp*s1*.9+fr*pow(1.-N.z,1.5)*.6+smoothstep(2.5*S,0.,dep)*.3;
-float a=aa*op;gl_FragColor=vec4(clamp(col,0.,1.)*a,a+sh*(1.-a));}`;
-function initGL(){try{const c=document.createElement('canvas'),g=c.getContext('webgl',{premultipliedAlpha:true,alpha:true});if(!g)throw 0;
- const sh=(t,s)=>{const x=g.createShader(t);g.shaderSource(x,s);g.compileShader(x);if(!g.getShaderParameter(x,g.COMPILE_STATUS))throw g.getShaderInfoLog(x);return x};
- const p=g.createProgram();g.attachShader(p,sh(g.VERTEX_SHADER,VS));g.attachShader(p,sh(g.FRAGMENT_SHADER,FS));g.linkProgram(p);if(!g.getProgramParameter(p,g.LINK_STATUS))throw 'link';g.useProgram(p);
- g.bindBuffer(g.ARRAY_BUFFER,g.createBuffer());g.bufferData(g.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),g.STATIC_DRAW);const l=g.getAttribLocation(p,'P');g.enableVertexAttribArray(l);g.vertexAttribPointer(l,2,g.FLOAT,false,0,0);
- const t=g.createTexture();g.bindTexture(g.TEXTURE_2D,t);[g.TEXTURE_MIN_FILTER,g.TEXTURE_MAG_FILTER].forEach(k=>g.texParameteri(g.TEXTURE_2D,k,g.LINEAR));[g.TEXTURE_WRAP_S,g.TEXTURE_WRAP_T].forEach(k=>g.texParameteri(g.TEXTURE_2D,k,g.CLAMP_TO_EDGE));
- return{c,g,p,u:n=>g.getUniformLocation(p,n)}}catch(e){console.error('liquid glass init failed',e);return null}}
-function glass(c,o,s,W,H){if(!G&&!gErr){G=initGL();if(!G){gErr=1;toast('Glass shader unavailable here, showing a plain fallback')}}
- const w=o.w*s,hh=o.h*s;
- if(!G){c.save();c.translate(o.x*s,o.y*s);c.rotate(o.rot*Math.PI/180);c.fillStyle='rgba(255,255,255,.25)';c.beginPath();c.roundRect(-w/2,-hh/2,w,hh,Math.min(o.type=='circle'?1e5:o.rad*s,w/2,hh/2));c.fill();c.restore();return}
- const{g,u}=G;if(G.c.width!=W||G.c.height!=H){G.c.width=W;G.c.height=H}g.viewport(0,0,W,H);
- g.texImage2D(g.TEXTURE_2D,0,g.RGBA,g.RGBA,g.UNSIGNED_BYTE,c.canvas);
- const hex=x=>hx(x).slice(0,3).map(v=>v/255),rd=o.type=='circle'?Math.min(w,hh)/2:Math.min(o.rad*s,w/2,hh/2);
- g.uniform2f(u('R'),W,H);g.uniform2f(u('C'),o.x*s,o.y*s);g.uniform2f(u('H'),w/2,hh/2);
- Object.entries({rot:o.rot*Math.PI/180,rad:rd,refr:o.refr,ca:o.ca,bl:o.gb,fr:o.fres,sp:o.spec,bev:Math.max(2,o.bev*s),op:o.op,ta:o.ta,S:s,ior:o.ior}).forEach(([k,v])=>g.uniform1f(u(k),v));
- g.uniform3fv(u('tint'),hex(o.tint));g.clearColor(0,0,0,0);g.clear(g.COLOR_BUFFER_BIT);g.drawArrays(g.TRIANGLE_STRIP,0,4);c.drawImage(G.c,0,0)}
+// ---- liquid glass (ybouane/liquidglass, vendored in /vendor) ----
+const ST=$('#stage');let LGi=null,LGsig='',LGv=0,gEls={};
+const isG=o=>o.glass&&(o.type=='rect'||o.type=='circle')&&o.vis;
+const gcfg=(o,z)=>({cornerRadius:(o.type=='circle'?Math.min(o.w,o.h)/2:Math.min(o.rad,o.w/2,o.h/2))*z,zRadius:Math.max(1,Math.min(o.bev,Math.min(o.w,o.h)/2)*z),refraction:o.refr,chromAberration:o.ca,edgeHighlight:o.edge,specular:o.spec,fresnel:o.fres,blurAmount:o.gb,tintStrength:o.ta,saturation:o.sat,opacity:o.op,shadowOpacity:.3});
+function gStyle(e,o,z){const s=e.style;s.position='absolute';s.left=(o.x-o.w/2)*z+'px';s.top=(o.y-o.h/2)*z+'px';s.width=o.w*z+'px';s.height=o.h*z+'px';s.pointerEvents='none';e.dataset.config=JSON.stringify(gcfg(o,z))}
+async function glassSync(){const gs=doc.objs.filter(isG),sig=gs.map(o=>o.id).join();
+ if(!window.LiquidGlass){if(gs.length)toast('Glass library failed to load, showing a plain fallback');return}
+ if(sig!==LGsig){LGsig=sig;const my=++LGv;if(LGi){LGi.destroy();LGi=null}Object.values(gEls).forEach(e=>e.remove());gEls={};const root=$('#root');
+  gs.forEach(o=>{const e=h('div');gEls[o.id]=e;gStyle(e,o,zoom);root.append(e)});
+  if(gs.length){try{const i=await LiquidGlass.init({root,glassElements:Object.values(gEls)});if(my!==LGv){i.destroy();return}LGi=i}catch(x){console.error(x);toast('Liquid glass failed to start, see console')}}}
+ else{gs.forEach(o=>gStyle(gEls[o.id],o,zoom));LGi&&LGi.markChanged(cv)}}
+const frames=n=>new Promise(r=>{const f=()=>--n<=0?setTimeout(r,250):requestAnimationFrame(f);f()});
+async function exportCanvas(){const W=doc.w,H=doc.h,out=h('canvas');out.width=W;out.height=H;const c=out.getContext('2d');render(c,1,W,H);const gs=doc.objs.filter(isG);if(!gs.length||!window.LiquidGlass)return out;
+ const st=h('div');st.style.cssText=`position:fixed;left:0;top:0;width:${W}px;height:${H}px;z-index:-1;pointer-events:none`;document.body.append(st);
+ const art=h('canvas');art.width=W;art.height=H;art.style.cssText='position:absolute;left:0;top:0';art.getContext('2d').drawImage(out,0,0);st.append(art);
+ const els=gs.map(o=>{const e=h('div');gStyle(e,o,1);return e});st.append(...els);
+ try{const inst=await LiquidGlass.init({root:st,glassElements:els});await frames(8);const R=st.getBoundingClientRect();
+  els.forEach(e=>{const k=e.querySelector('canvas');if(k){const r=k.getBoundingClientRect();c.drawImage(k,r.left-R.left,r.top-R.top,r.width,r.height)}});inst.destroy()}catch(x){console.error(x);toast('Glass export failed, exported without glass')}
+ st.remove();return out}
+function ov(){const o2=$('#ov');o2.width=cv.width;o2.height=cv.height;const c=o2.getContext('2d'),o=get(sel);if(!o)return;const s=zoom;c.translate(o.x*s,o.y*s);c.rotate((o.glass?0:o.rot)*Math.PI/180);c.strokeStyle='#0a84ff';c.lineWidth=2;c.strokeRect(-o.w*s/2,-o.h*s/2,o.w*s,o.h*s);c.fillStyle='#fff';c.fillRect(o.w*s/2-8,o.h*s/2-8,16,16)}
 // ---- render engine ----
 let noise;function grainTile(){noise=h('canvas');noise.width=noise.height=256;const c=noise.getContext('2d'),d=c.createImageData(256,256);for(let i=0;i<d.data.length;i+=4){d.data[i]=d.data[i+1]=d.data[i+2]=Math.random()*255;d.data[i+3]=255}c.putImageData(d,0,0)}
 function blobPath(c,w,h){const a=w/2,b=h/2;c.beginPath();c.moveTo(0,-b);c.bezierCurveTo(a*.9,-b,a,-b*.2,a*.8,b*.3);c.bezierCurveTo(a*.6,b,a*.1,b,-a*.3,b*.9);c.bezierCurveTo(-a,b*.8,-a,-b*.1,-a*.7,-b*.5);c.bezierCurveTo(-a*.5,-b*.9,-a*.2,-b,0,-b);c.closePath()}
 const get=id=>doc.objs.find(o=>o.id==id);
-function render(c,s,W,H,uiOn){
+function render(c,s,W,H){
  const a=doc.ang*Math.PI/180,r=Math.hypot(W,H)/2,cx=W/2,cy=H/2,g=c.createLinearGradient(cx-Math.sin(a)*r,cy+Math.cos(a)*r,cx+Math.sin(a)*r,cy-Math.cos(a)*r);
  g.addColorStop(0,doc.c1);g.addColorStop(1,doc.c2);c.globalCompositeOperation='source-over';c.filter='none';c.globalAlpha=1;c.fillStyle=g;c.fillRect(0,0,W,H);
- for(const o of doc.objs){if(!o.vis)continue;if(o.glass&&(o.type=='rect'||o.type=='circle')){glass(c,o,s,W,H);continue}
+ for(const o of doc.objs){if(!o.vis)continue;if(o.glass&&(o.type=='rect'||o.type=='circle')){if(!window.LiquidGlass){c.save();c.translate(o.x*s,o.y*s);c.fillStyle='rgba(255,255,255,.25)';c.beginPath();c.roundRect(-o.w*s/2,-o.h*s/2,o.w*s,o.h*s,Math.min(o.type=='circle'?1e5:o.rad*s,o.w*s/2,o.h*s/2));c.fill();c.restore()}continue}
   c.save();c.translate(o.x*s,o.y*s);c.rotate(o.rot*Math.PI/180);c.globalAlpha=o.op;c.globalCompositeOperation=o.bm;c.filter=o.blur?`blur(${o.blur*s}px)`:'none';
   const w=o.w*s,hh=o.h*s,f=c.createLinearGradient(-w/2,-hh/2,w/2,hh/2);f.addColorStop(0,o.fill);f.addColorStop(1,o.fill2);c.fillStyle=f;
   if(o.type=='circle'){c.beginPath();c.ellipse(0,0,w/2,hh/2,0,0,7);c.fill()}
@@ -63,9 +47,8 @@ function render(c,s,W,H,uiOn){
   else if(o.type=='text'){c.font=`700 ${hh*.8}px -apple-system,system-ui,sans-serif`;c.textAlign='center';c.textBaseline='middle';c.fillText(o.text,0,0)}
   else if(o.type=='img'&&imgs[o.id]?.complete)c.drawImage(imgs[o.id],-w/2,-hh/2,w,hh);
   c.restore()}
- if(doc.grain>0){c.save();c.globalAlpha=doc.grain;c.globalCompositeOperation='overlay';c.fillStyle=c.createPattern(noise,'repeat');c.fillRect(0,0,W,H);c.restore()}
- if(uiOn){const o=get(sel);if(o){c.save();c.translate(o.x*s,o.y*s);c.rotate(o.rot*Math.PI/180);c.strokeStyle='#0a84ff';c.lineWidth=2;c.strokeRect(-o.w*s/2,-o.h*s/2,o.w*s,o.h*s);c.fillStyle='#fff';c.fillRect(o.w*s/2-8,o.h*s/2-8,16,16);c.restore()}}}
-function draw(){cv.width=Math.round(doc.w*zoom);cv.height=Math.round(doc.h*zoom);render(ctx,zoom,cv.width,cv.height,1);ui()}
+ if(doc.grain>0){c.save();c.globalAlpha=doc.grain;c.globalCompositeOperation='overlay';c.fillStyle=c.createPattern(noise,'repeat');c.fillRect(0,0,W,H);c.restore()}}
+function draw(){cv.width=Math.round(doc.w*zoom);cv.height=Math.round(doc.h*zoom);const st=$('#stage');st.style.width=cv.width+'px';st.style.height=cv.height+'px';render(ctx,zoom,cv.width,cv.height);ov();glassSync();ui()}
 function toast(m){const t=$('#toast');t.className='gl';t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',3500)}
 // ---- history + storage ----
 function commit(){hist.push(JSON.stringify(doc));if(hist.length>80)hist.shift();fut=[];save()}
@@ -107,9 +90,9 @@ function insp(){const I=$('#in'),o=get(sel),key=sel+':'+(o?o.glass:'');if(I.data
  if(!o){I.append(h('p','mut','Select a layer to edit it.'));return}
  const sh=!o.glass&&o.type!='img',gl=o.type=='rect'||o.type=='circle';
  sec('Appearance',row('Name',tx(o,'name')),...(o.type=='text'?[row('Text',tx(o,'text'))]:[]),...(sh?[row('Fill',cp(o,'fill')),row('Fill 2',cp(o,'fill2'))]:[]),row('Opacity',rg(o,'op',0,1,.01)),...(o.glass?[]:[row('Blend',dd(BM,o.bm,v=>{o.bm=v;commit();draw()}))]));
- sec('Geometry',row('Width',rg(o,'w',20,4000)),row('Height',rg(o,'h',20,4000)),row('Rotate',rg(o,'rot',-180,180)),...(o.type=='rect'?[row('Radius',rg(o,'rad',0,2000))]:[]));
+ sec('Geometry',row('Width',rg(o,'w',20,4000)),row('Height',rg(o,'h',20,4000)),...(o.glass?[]:[row('Rotate',rg(o,'rot',-180,180))]),...(o.type=='rect'?[row('Radius',rg(o,'rad',0,2000))]:[]));
  if(!o.glass)sec('Effects',row('Blur',rg(o,'blur',0,300)));
- if(gl){sec('Liquid Glass',row('Enabled',tg(o,'glass')));if(o.glass)I.append(row('Depth',rg(o,'refr',0,3,.01)),row('Index',rg(o,'ior',1.1,2.2,.01)),row('Aberration',rg(o,'ca',0,1,.01)),row('Backdrop blur',rg(o,'gb',0,1,.01)),row('Fresnel',rg(o,'fres',0,1,.01)),row('Specular',rg(o,'spec',0,1,.01)),row('Bezel',rg(o,'bev',10,400)),row('Tint',cp(o,'tint')),row('Tint amount',rg(o,'ta',0,1,.01)))}
+ if(gl){sec('Liquid Glass',row('Enabled',tg(o,'glass')));if(o.glass)I.append(row('Refraction',rg(o,'refr',0,1,.01)),row('Aberration',rg(o,'ca',0,.3,.01)),row('Backdrop blur',rg(o,'gb',0,1,.01)),row('Fresnel',rg(o,'fres',0,1,.01)),row('Specular',rg(o,'spec',0,1,.01)),row('Edge light',rg(o,'edge',0,1,.01)),row('Bevel',rg(o,'bev',5,400)),row('Tint',rg(o,'ta',0,1,.01)),row('Saturation',rg(o,'sat',-1,1,.01)))}
  const d=h('button','btn','Duplicate');d.onclick=dup;I.append(h('h4'),d)}
 // ---- left panel ----
 function left(){const P=$('#lp');P.innerHTML='';
@@ -133,12 +116,12 @@ function fit(){const m=$('#M');zoom=Math.max(.02,Math.min((m.clientWidth-48)/doc
 $('#zoom').oninput=e=>{zoom=e.target.value/100;draw()};
 // ---- pointer ----
 let drag=null;const loc=(o,px,py)=>{const a=-o.rot*Math.PI/180,dx=px-o.x,dy=py-o.y;return[dx*Math.cos(a)-dy*Math.sin(a),dx*Math.sin(a)+dy*Math.cos(a)]};
-cv.onpointerdown=e=>{closePop();const px=e.offsetX/zoom,py=e.offsetY/zoom;cv.setPointerCapture(e.pointerId);const s=get(sel);
+ST.onpointerdown=e=>{closePop();const q=ST.getBoundingClientRect(),px=(e.clientX-q.left)/zoom,py=(e.clientY-q.top)/zoom;ST.setPointerCapture(e.pointerId);const s=get(sel);
  if(s){const[lx,ly]=loc(s,px,py);if(Math.abs(lx-s.w/2)<30/zoom&&Math.abs(ly-s.h/2)<30/zoom){drag={m:'r',o:s};return}}
  for(let i=doc.objs.length-1;i>=0;i--){const o=doc.objs[i];if(!o.vis)continue;const[lx,ly]=loc(o,px,py);if(Math.abs(lx)<=o.w/2&&Math.abs(ly)<=o.h/2){sel=o.id;drag={m:'m',o,dx:o.x-px,dy:o.y-py};draw();return}}
  sel=null;draw()};
-cv.onpointermove=e=>{if(!drag)return;const px=e.offsetX/zoom,py=e.offsetY/zoom,o=drag.o;if(drag.m=='m'){o.x=px+drag.dx;o.y=py+drag.dy}else{const[lx,ly]=loc(o,px,py);o.w=Math.max(20,lx*2);o.h=Math.max(20,ly*2);$('#in').dataset.k=''}draw()};
-cv.onpointerup=()=>{if(drag){drag=null;commit()}};
+ST.onpointermove=e=>{if(!drag)return;const q=ST.getBoundingClientRect(),px=(e.clientX-q.left)/zoom,py=(e.clientY-q.top)/zoom,o=drag.o;if(drag.m=='m'){o.x=px+drag.dx;o.y=py+drag.dy}else{const[lx,ly]=loc(o,px,py);o.w=Math.max(20,lx*2);o.h=Math.max(20,ly*2);$('#in').dataset.k=''}draw()};
+ST.onpointerup=()=>{if(drag){drag=null;commit()}};
 addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;const o=get(sel),m=e.ctrlKey||e.metaKey,k=e.key,n=e.shiftKey?10:1;
  if(m&&k=='z'){e.preventDefault();$(e.shiftKey?'#redo':'#undo').click()}else if(m&&k=='d'){e.preventDefault();dup()}
  else if(k=='Escape'){closePop();sel=null;draw()}
@@ -146,7 +129,7 @@ addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)
  else if(o&&k.startsWith('Arrow')){e.preventDefault();o.x+=({ArrowLeft:-n,ArrowRight:n})[k]||0;o.y+=({ArrowUp:-n,ArrowDown:n})[k]||0;commit();draw()}
  else if(o&&(k=='['||k==']')){o.rot+=k=='['?-5:5;$('#in').dataset.k='';commit();draw()}});
 // ---- export / import ----
-$('#dl').onclick=()=>{const c=h('canvas');c.width=doc.w;c.height=doc.h;render(c.getContext('2d'),1,doc.w,doc.h,0);c.toBlob(b=>dlf(b,`${$('#name').value}.${fmt=='jpeg'?'jpg':fmt}`),'image/'+fmt,.95)};
+$('#dl').onclick=async()=>{toast('Exporting...');const c=await exportCanvas();c.toBlob(b=>dlf(b,`${$('#name').value}.${fmt=='jpeg'?'jpg':fmt}`),'image/'+fmt,.95)};
 function dlf(b,n){const a=h('a');a.href=URL.createObjectURL(b);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),999)}
 $('#exp').onclick=()=>dlf(new Blob([JSON.stringify({name:$('#name').value,doc})],{type:'application/json'}),$('#name').value+'.wallpaper.json');
 $('#imp').onclick=()=>$('#j').click();
