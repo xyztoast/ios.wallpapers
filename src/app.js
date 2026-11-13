@@ -5,7 +5,7 @@ const BM=['source-over','multiply','screen','overlay','soft-light','hard-light',
 const uid=()=>Math.random().toString(36).slice(2,8),imgs={},clamp=v=>Math.max(0,Math.min(1,v));
 let doc,sel=null,zoom=.3,hist=[],fut=[],tab='add';
 const fresh=()=>({w:1170,h:2532,c1:'#5ee7c5',c2:'#b9f5d6',ang:160,grain:.08,objs:[]});
-const mk=(t,o={})=>({id:uid(),type:t,name:t,x:doc.w/2,y:doc.h/2,w:600,h:600,rot:0,fill:'#ffd36b',fill2:'#ff5e7e',op:1,blur:0,vis:1,text:'Hello',rad:140,bm:'source-over',glass:0,refr:.6,ca:.35,gb:.2,fres:.4,spec:.6,bev:90,tint:'#ffffff',ta:.06,...o});
+const mk=(t,o={})=>({id:uid(),type:t,name:t,x:doc.w/2,y:doc.h/2,w:600,h:600,rot:0,fill:'#ffd36b',fill2:'#ff5e7e',op:1,blur:0,vis:1,text:'Hello',rad:140,bm:'source-over',glass:0,refr:1,ca:.3,gb:.1,fres:.5,spec:.7,bev:120,ior:1.5,tint:'#ffffff',ta:.06,...o});
 // ---- color utils ----
 const hx=c=>{c=c.replace('#','');if(c.length==6)c+='ff';return[0,2,4,6].map(i=>parseInt(c.substr(i,2),16))};
 const toHex=(r,g,b,a)=>'#'+[r,g,b,a].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
@@ -14,19 +14,23 @@ function hsv2rgb(H,S,V){const f=n=>{const k=(n+H/60)%6;return(V-V*S*Math.max(0,M
 // ---- liquid glass shader (webgl) ----
 let G,gErr=0;
 const VS='attribute vec2 P;void main(){gl_Position=vec4(P,0.,1.);}';
-const FS=`precision highp float;uniform sampler2D T;uniform vec2 R,C,H;uniform float rot,rad,refr,ca,bl,fr,sp,bev,op,ta,S;uniform vec3 tint;
+const FS=`precision highp float;uniform sampler2D T;uniform vec2 R,C,H;uniform float rot,rad,refr,ca,bl,fr,sp,bev,op,ta,S,ior;uniform vec3 tint;
 float sd(vec2 p){float a=-rot,c=cos(a),s=sin(a);vec2 q=mat2(c,s,-s,c)*p;vec2 d=abs(q)-H+rad;return length(max(d,0.))+min(max(d.x,d.y),0.)-rad;}
 vec3 tx(vec2 f){return texture2D(T,clamp(f/R,0.,1.)).rgb;}
 void main(){vec2 f=vec2(gl_FragCoord.x,R.y-gl_FragCoord.y),p=f-C;float d=sd(p);
 float aa=smoothstep(.75,-.75,d);float sh=smoothstep(40.*S,-5.*S,sd(p-vec2(0.,14.*S)))*.28*(1.-aa);
 if(d>45.*S){gl_FragColor=vec4(0.);return;}
-float dep=-d,e=clamp(1.-dep/bev,0.,1.);vec2 k=vec2(1.5,0.);
-vec2 n=normalize(vec2(sd(p+k.xy)-sd(p-k.xy),sd(p+k.yx)-sd(p-k.yx))+vec2(1e-5));
-vec2 dir=-n*e*e*refr*bev;float br=bl*24.*S;vec3 col=vec3(0.);
-for(int i=0;i<9;i++){vec2 o=vec2(float(i/3)-1.,float(i-(i/3)*3)-1.)*br;vec2 g=f+dir+o;col+=vec3(tx(g+dir*ca).r,tx(g).g,tx(g-dir*ca).b);}
-col/=9.;col=mix(col,tint,ta);col+=fr*pow(e,3.)*.5;
-vec2 L=normalize(vec2(-.6,-.8));float spc=pow(max(dot(n,L),0.),3.)+.5*pow(max(dot(n,-L),0.),3.);
-col+=sp*spc*e*.7;col+=smoothstep(2.5*S,0.,dep)*.35;
+float B=max(bev,2.),dep=max(-d,0.),t=clamp(dep/B,0.,1.),u=1.-t,u4=u*u*u*u;
+float y=pow(1.-u4,.25),yp=min(pow(max(1.-u4,1e-4),-.75)*u*u*u,6.);if(t>=1.)yp=0.;
+vec2 k=vec2(1.5,0.);vec2 n=normalize(vec2(sd(p+k.xy)-sd(p-k.xy),sd(p+k.yx)-sd(p-k.yx))+vec2(1e-5));
+vec3 N=normalize(vec3(n*refr*.9*yp,1.));float Lh=refr*B*.9*(.4+y);
+vec3 I=vec3(0.,0.,-1.),r0=refract(I,N,1./(ior-ca*.1)),r1=refract(I,N,1./ior),r2=refract(I,N,1./(ior+ca*.1));
+vec2 o0=r0.xy/-r0.z*Lh,o1=r1.xy/-r1.z*Lh,o2=r2.xy/-r2.z*Lh;float br=bl*24.*S;vec3 col=vec3(0.);
+for(int i=0;i<9;i++){vec2 o=vec2(float(i/3)-1.,float(i-(i/3)*3)-1.)*br;col+=vec3(tx(f+o+o0).r,tx(f+o+o1).g,tx(f+o+o2).b);}
+col/=9.;col=mix(col,tint,ta);
+vec3 V=vec3(0.,0.,1.),L1=normalize(vec3(-.5,-.7,.5)),L2=normalize(vec3(.5,.7,.5));
+float s1=pow(max(dot(N,normalize(L1+V)),0.),40.)+.6*pow(max(dot(N,normalize(L2+V)),0.),40.);
+col+=sp*s1*.9+fr*pow(1.-N.z,1.5)*.6+smoothstep(2.5*S,0.,dep)*.3;
 float a=aa*op;gl_FragColor=vec4(clamp(col,0.,1.)*a,a+sh*(1.-a));}`;
 function initGL(){try{const c=document.createElement('canvas'),g=c.getContext('webgl',{premultipliedAlpha:true,alpha:true});if(!g)throw 0;
  const sh=(t,s)=>{const x=g.createShader(t);g.shaderSource(x,s);g.compileShader(x);if(!g.getShaderParameter(x,g.COMPILE_STATUS))throw g.getShaderInfoLog(x);return x};
@@ -41,7 +45,7 @@ function glass(c,o,s,W,H){if(!G&&!gErr){G=initGL();if(!G){gErr=1;toast('Glass sh
  g.texImage2D(g.TEXTURE_2D,0,g.RGBA,g.RGBA,g.UNSIGNED_BYTE,c.canvas);
  const hex=x=>hx(x).slice(0,3).map(v=>v/255),rd=o.type=='circle'?Math.min(w,hh)/2:Math.min(o.rad*s,w/2,hh/2);
  g.uniform2f(u('R'),W,H);g.uniform2f(u('C'),o.x*s,o.y*s);g.uniform2f(u('H'),w/2,hh/2);
- Object.entries({rot:o.rot*Math.PI/180,rad:rd,refr:o.refr,ca:o.ca,bl:o.gb,fr:o.fres,sp:o.spec,bev:Math.max(2,o.bev*s),op:o.op,ta:o.ta,S:s}).forEach(([k,v])=>g.uniform1f(u(k),v));
+ Object.entries({rot:o.rot*Math.PI/180,rad:rd,refr:o.refr,ca:o.ca,bl:o.gb,fr:o.fres,sp:o.spec,bev:Math.max(2,o.bev*s),op:o.op,ta:o.ta,S:s,ior:o.ior}).forEach(([k,v])=>g.uniform1f(u(k),v));
  g.uniform3fv(u('tint'),hex(o.tint));g.clearColor(0,0,0,0);g.clear(g.COLOR_BUFFER_BIT);g.drawArrays(g.TRIANGLE_STRIP,0,4);c.drawImage(G.c,0,0)}
 // ---- render engine ----
 let noise;function grainTile(){noise=h('canvas');noise.width=noise.height=256;const c=noise.getContext('2d'),d=c.createImageData(256,256);for(let i=0;i<d.data.length;i+=4){d.data[i]=d.data[i+1]=d.data[i+2]=Math.random()*255;d.data[i+3]=255}c.putImageData(d,0,0)}
@@ -105,7 +109,7 @@ function insp(){const I=$('#in'),o=get(sel),key=sel+':'+(o?o.glass:'');if(I.data
  sec('Appearance',row('Name',tx(o,'name')),...(o.type=='text'?[row('Text',tx(o,'text'))]:[]),...(sh?[row('Fill',cp(o,'fill')),row('Fill 2',cp(o,'fill2'))]:[]),row('Opacity',rg(o,'op',0,1,.01)),...(o.glass?[]:[row('Blend',dd(BM,o.bm,v=>{o.bm=v;commit();draw()}))]));
  sec('Geometry',row('Width',rg(o,'w',20,4000)),row('Height',rg(o,'h',20,4000)),row('Rotate',rg(o,'rot',-180,180)),...(o.type=='rect'?[row('Radius',rg(o,'rad',0,2000))]:[]));
  if(!o.glass)sec('Effects',row('Blur',rg(o,'blur',0,300)));
- if(gl){sec('Liquid Glass',row('Enabled',tg(o,'glass')));if(o.glass)I.append(row('Refraction',rg(o,'refr',0,1.5,.01)),row('Aberration',rg(o,'ca',0,1,.01)),row('Backdrop blur',rg(o,'gb',0,1,.01)),row('Fresnel',rg(o,'fres',0,1,.01)),row('Specular',rg(o,'spec',0,1,.01)),row('Bevel',rg(o,'bev',10,400)),row('Tint',cp(o,'tint')),row('Tint amount',rg(o,'ta',0,1,.01)))}
+ if(gl){sec('Liquid Glass',row('Enabled',tg(o,'glass')));if(o.glass)I.append(row('Depth',rg(o,'refr',0,3,.01)),row('Index',rg(o,'ior',1.1,2.2,.01)),row('Aberration',rg(o,'ca',0,1,.01)),row('Backdrop blur',rg(o,'gb',0,1,.01)),row('Fresnel',rg(o,'fres',0,1,.01)),row('Specular',rg(o,'spec',0,1,.01)),row('Bezel',rg(o,'bev',10,400)),row('Tint',cp(o,'tint')),row('Tint amount',rg(o,'ta',0,1,.01)))}
  const d=h('button','btn','Duplicate');d.onclick=dup;I.append(h('h4'),d)}
 // ---- left panel ----
 function left(){const P=$('#lp');P.innerHTML='';
